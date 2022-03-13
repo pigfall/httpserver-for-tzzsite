@@ -16,12 +16,13 @@ func main() {
 	var certfile string
 	var port string
 	var httpPort string
+	var dir string
 	flag.StringVar(&keyfile,"keyfile","","key file path")
 	flag.StringVar(&certfile,"certfile","","cert file path")
 	flag.StringVar(&port,"port","","https server port")
 	flag.StringVar(&httpPort,"httpPort","","http server port")
+	flag.StringVar(&dir,"dir","","html directory")
 	flag.Parse()
-	h :=http.FileServer(http.Dir("."))
 
 	ctx,cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -30,6 +31,12 @@ func main() {
 		panic(err)
 	}
 
+	srv := http.NewServeMux()
+	srv.Handle(
+			"/",
+			http.FileServer(http.Dir(dir)),
+	)
+
 	go func(){
 		defer cancel()
 		fmt.Println("server running")
@@ -37,7 +44,7 @@ func main() {
 			httpsL,
 			http.HandlerFunc(
 				func(res http.ResponseWriter,req *http.Request){
-					h.ServeHTTP(res,req)
+					srv.ServeHTTP(res,req)
 				},
 			),
 			certfile,keyfile,
@@ -51,6 +58,12 @@ func main() {
 	if err != nil{
 		panic(err)
 	}
+
+	go func(ctx context.Context){
+		<-ctx.Done()
+		httpL.Close()
+		httpsL.Close()
+	}(ctx)
 
 	fmt.Println("http server running")
 	err = http.Serve(
@@ -66,14 +79,10 @@ func main() {
 			},
 		),
 	)
-	go func(ctx context.Context){
-		<-ctx.Done()
-		httpL.Close()
-		httpsL.Close()
-	}(ctx)
 	cancel()
 	if err != nil{
 		fmt.Println(err)
 	}
+	fmt.Println("server quit")
 
 }
